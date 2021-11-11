@@ -48,6 +48,7 @@ func NewCmdTarget(f util.Factory, o *TargetOptions) *cobra.Command {
 
 	cmd.AddCommand(NewCmdUnset(f, NewUnsetOptions(ioStreams)))
 	cmd.AddCommand(NewCmdView(f, NewViewOptions(ioStreams)))
+	cmd.AddCommand(NewCmdKubeconfig(f, NewKubeconfigOptions(ioStreams)))
 
 	o.AddFlags(cmd.Flags())
 

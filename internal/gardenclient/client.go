@@ -76,6 +76,8 @@ type Client interface {
 	GetNamespace(ctx context.Context, namespaceName string) (*corev1.Namespace, error)
 	// GetSecret returns a Kubernetes secret resource
 	GetSecret(ctx context.Context, namespaceName string, secretName string) (*corev1.Secret, error)
+	// GetConfigMap returns a Kubernetes configMap resource
+	GetConfigMap(ctx context.Context, namespace string, name string) (*corev1.ConfigMap, error)
 
 	// RuntimeClient returns the underlying kubernetes runtime client
 	// TODO: Remove this when we switched all APIs to the new gardenclient
@@ -272,9 +274,9 @@ func (g *clientImpl) GetSecretBinding(ctx context.Context, namespace, name strin
 	return secretBinding, nil
 }
 
-func (g *clientImpl) GetSecret(ctx context.Context, namespaceName string, secretName string) (*corev1.Secret, error) {
+func (g *clientImpl) GetSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, error) {
 	secret := corev1.Secret{}
-	key := types.NamespacedName{Name: secretName, Namespace: namespaceName}
+	key := types.NamespacedName{Name: name, Namespace: namespace}
 
 	if err := g.c.Get(ctx, key, &secret); err != nil {
 		return nil, fmt.Errorf("failed to get secret %v: %w", key, err)
@@ -328,4 +330,15 @@ func (cp CloudProfile) GetOpenstackProviderConfig() (*openstackv1alpha1.CloudPro
 	}
 
 	return cloudProfileConfig, nil
+}
+
+func (g *clientImpl) GetConfigMap(ctx context.Context, namespace string, name string) (*corev1.ConfigMap, error) {
+	cm := corev1.ConfigMap{}
+	key := types.NamespacedName{Name: name, Namespace: namespace}
+
+	if err := g.c.Get(ctx, key, &cm); err != nil {
+		return nil, fmt.Errorf("failed to get configMap %v: %w", key, err)
+	}
+
+	return &cm, nil
 }

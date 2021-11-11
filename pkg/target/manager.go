@@ -67,6 +67,9 @@ type Manager interface {
 	// ShootClusterClient controller-runtime client for accessing the configured shoot cluster
 	ShootClusterClient(ctx context.Context, t Target) (client.Client, error)
 
+	// Kubeconfig returns the kubeconfig for the current target
+	Kubeconfig(ctx context.Context, t Target) ([]byte, error)
+
 	// Configuration returns the current gardenctl configuration
 	Configuration() *config.Config
 
@@ -370,12 +373,7 @@ func (m *managerImpl) ensureSeedKubeconfig(ctx context.Context, t Target) ([]byt
 		return nil, fmt.Errorf("failed to create garden cluster client: %w", err)
 	}
 
-	seed, err := gardenClient.GetSeed(ctx, t.SeedName())
-	if err != nil {
-		return nil, fmt.Errorf("invalid seed cluster: %w", err)
-	}
-
-	secret, err := gardenClient.GetSecret(ctx, seed.Spec.SecretRef.Namespace, seed.Spec.SecretRef.Name)
+	secret, err := gardenClient.GetSecret(ctx, "garden", fmt.Sprintf("%s.oidc", t.SeedName()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve seed kubeconfig: %w", err)
 	}
@@ -433,16 +431,34 @@ func (m *managerImpl) ensureShootKubeconfig(ctx context.Context, t Target) ([]by
 		return nil, fmt.Errorf("failed to fetch shoot: %w", err)
 	}
 
-	secret, err := gardenClient.GetSecret(ctx, shoot.Namespace, fmt.Sprintf("%s.kubeconfig", shoot.Name))
+	cm, err := gardenClient.GetConfigMap(ctx, shoot.Namespace, fmt.Sprintf("%s.kubeconfig", shoot.Name))
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve seed kubeconfig: %w", err)
 	}
 
-	if err := m.kubeconfigCache.Write(t, secret.Data["kubeconfig"]); err != nil {
+	kubeconfig := []byte(cm.Data["kubeconfig"])
+
+	if err := m.kubeconfigCache.Write(t, kubeconfig); err != nil {
 		return nil, fmt.Errorf("failed to update kubeconfig cache: %w", err)
 	}
 
-	return secret.Data["kubeconfig"], nil
+	return kubeconfig, nil
+}
+
+func (m *managerImpl) Kubeconfig(ctx context.Context, t Target) ([]byte, error) {
+	if t.IsEmpty() {
+		return nil, errors.New("no target specified")
+	}
+
+	if t.ShootName() != "" {
+		return m.ensureShootKubeconfig(ctx, t)
+	}
+
+	if t.SeedName() != "" {
+		return m.ensureSeedKubeconfig(ctx, t)
+	}
+
+	return nil, errors.New("not implemented")
 }
 
 func (m *managerImpl) patchTarget(patch func(t *targetImpl) error) error {
