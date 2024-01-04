@@ -294,6 +294,7 @@ var _ = Describe("SSH Command", func() {
 		ctxTimeout, cancelTimeout = context.WithTimeout(context.Background(), 30*time.Second)
 		ctx, cancel = context.WithCancel(ctxTimeout)
 		factory.ContextImpl = ctx
+		manager = targetmocks.NewMockManager(ctrl)
 	})
 
 	AfterEach(func() {
@@ -304,14 +305,14 @@ var _ = Describe("SSH Command", func() {
 
 	Describe("RunE", func() {
 		BeforeEach(func() {
-			clientProvider.EXPECT().FromClientConfig(gomock.Any()).Return(shootClient, nil).AnyTimes().
+			manager.EXPECT().ShootClient(factory.ContextImpl, currentTarget).Return(shootClient, nil).AnyTimes().
 				Do(func(clientConfig clientcmd.ClientConfig) {
 					config, err := clientConfig.RawConfig()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(config.CurrentContext).To(Equal(testShoot.Namespace + "--" + testShoot.Name + "-" + testShoot.Status.AdvertisedAddresses[0].Name))
 				})
-
 			shootClient = internalfake.NewClientWithObjects(testNode)
+			clientProvider.EXPECT().FromClientConfig(gomock.Any()).Return(shootClient, nil).AnyTimes()
 		})
 
 		It("should reject bad options", func() {
@@ -708,9 +709,9 @@ var _ = Describe("SSH Command", func() {
 		})
 
 		It("should find nodes based on their prefix from machine objects", func() {
-			clientConfig, err := clientcmd.NewClientConfigFromBytes(seedKubeconfigSecret.Data["kubeconfig"])
+			seedClientConfig, err := clientcmd.NewClientConfigFromBytes(seedKubeconfigSecret.Data["kubeconfig"])
 			Expect(err).NotTo(HaveOccurred())
-			clientProvider.EXPECT().FromClientConfig(gomock.Eq(clientConfig)).Return(seedClient, nil)
+			clientProvider.EXPECT().FromClientConfig(gomock.Eq(seedClientConfig)).Return(seedClient, nil)
 			manager.EXPECT().SeedClient(ctx, gomock.Any()).Return(seedClient, nil).AnyTimes()
 
 			options := ssh.NewSSHOptions(streams)
